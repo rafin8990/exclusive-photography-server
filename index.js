@@ -62,6 +62,48 @@ async function run() {
         // console.log(reviews)
         res.send(reviews);
     });
+
+    //  email based my review data load 
+
+    app.get('/myreview', async (req, res)=>{
+        let query={};
+        if(req.query.email){
+            query={
+                email:req.query.email
+            }
+        }
+        const cursor=reviewCollection.find(query);
+        const allReview=await cursor.toArray()
+        res.send(allReview)
+    });
+
+    // update data 
+    app.get('/myreview/:id', async (req, res)=>{
+        const id=req.params.id;
+        const query={_id: ObjectId(id)};
+        const result=await reviewCollection.findOne(query);
+        res.send(result);
+
+    })
+
+    app.put('/myreview/:id', async(req, res)=>{
+        const id = req.params.id;
+        const filter={_id: ObjectId(id)}
+        const data=req.body;
+        console.log(data)
+        const option= {upsert:true};
+        const updatedUser= {
+            $set: {
+                name: data.name,
+                review: data.review,
+            }
+        } 
+        const result = await reviewCollection.updateOne(filter, updatedUser, option);
+        res.send(result);
+
+
+    })
+
     }
     finally {
 
