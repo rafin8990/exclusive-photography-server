@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const jwt=require('jsonwebtoken');
 require('dotenv').config()
 const app = express();
 const port = process.env.PORT || 5000;
@@ -13,10 +14,36 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.nuouh7o.mongodb.net/?retryWrites=true&w=majority`
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
 
+function verifyJWT(req, res, next){
+    const authHeader=req.headers.authorization;
+    if(!authHeader){
+     return res.status(401).send({message: 'unauthorized access '})
+    }
+    const token=authHeader.split(' ')[1]
+    jwt.verify(token,process.env.ACCESS_TOKEN, function(error, decoded){
+        if(error){
+           return res.status(403).send({message: 'Forbidden access'})
+        }
+        res.decoded=decoded;
+        next();
+    })
+    
+    
+}
+
+
 async function run() {
     try {
         const serviceCollection = client.db('reviewSite').collection('services');
         const reviewCollection=client.db('reviewSite').collection('reviews');
+
+
+        app.post('/jwt', async(req,res)=>{
+            const user=req.body
+            const token=jwt.sign(user,process.env.ACCESS_TOKEN, {expiresIn:'1d'})
+            res.send({token})
+        })
+
         // home page service data 
        app.get('/', async (req, res)=>{
         const query={}
@@ -42,15 +69,12 @@ async function run() {
 
        app.post('/reviews/:id', async (req,res)=>{
         const reviews=req.body
-        // console.log(user)
         const result=await reviewCollection.insertOne(reviews)
         res.send(result)
        });
 
     //    id wise get review data 
        app.get('/reviews/:id', async (req, res) => {
-        // const id=req.query.id
-        // console.log(id)
         let query = {};
         if(req.query.id){
             query={
@@ -59,13 +83,13 @@ async function run() {
         }
         const cursor = reviewCollection.find(query);
         const reviews = await cursor.toArray();
-        // console.log(reviews)
         res.send(reviews);
     });
 
     //  email based my review data load 
 
-    app.get('/myreview', async (req, res)=>{
+    app.get('/myreview',verifyJWT, async (req, res)=>{
+     
         let query={};
         if(req.query.email){
             query={
@@ -90,7 +114,6 @@ async function run() {
         const id = req.params.id;
         const filter={_id: ObjectId(id)}
         const data=req.body;
-        console.log(data)
         const option= {upsert:true};
         const updatedUser= {
             $set: {
@@ -102,7 +125,23 @@ async function run() {
         res.send(result);
 
 
-    })
+    });
+
+    // delete review 
+    app.delete('/myreview/:id', async (req, res)=>{
+        const id =req.params.id;
+        const query={_id: ObjectId(id)};
+        const result= await reviewCollection.deleteOne(query);
+        res.send(result);
+      });
+
+    //   insert service 
+
+    app.post('/reviews', async (req,res)=>{
+        const service=req.body
+        const result=await serviceCollection.insertOne(service)
+        res.send(result)
+       });
 
     }
     finally {
